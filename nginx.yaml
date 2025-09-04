@@ -1,0 +1,13 @@
+# minimal nginx pod configuration
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    method: fromcode
+    run: nginx-yaml
+    another: label
+  name: nginx-yaml
+spec:
+  containers:
+  - image: nginx
+    name: nginx
