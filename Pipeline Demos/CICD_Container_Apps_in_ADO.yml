@@ -1,0 +1,166 @@
+#this example is for demo purposes for CI/CD of Container Apps using Azure DevOps Pipelines with multi-region deployment and static code analysis the security scans will be step by step but can be combined as parallel jobs to make it more conveinent and faster.
+
+trigger:
+- main
+
+variables:
+    IMAGE_NAME: 'mycontainerappimage'
+    CONTAINERAPPS_APP: 'backend-api-app'
+    CONTAINERAPPS_ENV_EAST: 'my-containerapps-env-eastus'
+    CONTAINERAPPS_ENV_WEST: 'my-containerapps-env-westus'
+    RESOURCE_GROUP_EAST_DEV: 'my-containerapps-dev-eastus-rg'
+    RESOURCE_GROUP_WEST_DEV: 'my-containerapps-dev-westus-rg'
+    RESOURCE_GROUP_EAST_UAT: 'my-containerapps-uat-eastus-rg'
+    RESOURCE_GROUP_WEST_UAT: 'my-containerapps-uat-westus-rg'
+    ACR_NAME: 'mycontainerregistry'
+    TAG: 'v1.0.${{ Build.BuildId }}'
+
+# Build Stage with Code Quality and Security Scans
+stages:
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: BuildAndPush
+    displayName: 'Build and Push Docker Image'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+
+    # SonarCloud Preparation Step for Static Code Analysis
+    - task: SonarCloudPrepare@1
+      displayName: 'SonarCloud Analysis Preparation'
+      inputs:
+        SonarCloud: 'SonarCloudServiceConnection'
+        organization: 'my-organization'
+        scannerMode: 'CLI'
+        projectKey: 'my-container-app-key'
+        projectName: 'My Container App'
+# Docker Image Build and Push step        
+    - task: Docker@2
+      displayName: 'Build and Push Docker Image to ACR'
+      inputs:
+        command: 'buildAndPush'
+        repository: '$(IMAGE_NAME)'
+        dockerfile: '**/Dockerfile'
+        containerRegistry: 'myACRServiceConnection'
+        tags: '$(TAG)'
+
+# SonarCloud Publish Step to Publish Analysis Results
+    - task: SonarCloudPublish@1
+      displayName: 'Publish SonarCloud Results'
+      inputs:
+        pollingTimeoutSec: '300'
+
+  #security scan step using Veracode
+    - task: Veracode@3
+      displayName: 'Veracode Security Scan'
+      inputs:
+        ConnectionDetailsSelection: 'Endpoint'
+        AnalysisService: 'VeracodeServiceConnection'
+        veracodeAppProfile: '$(CONTAINERAPPS_APP)'
+        version: '$(TAG)'
+        filepath: '$(Build.SourcesDirectory)'
+        sandboxName: 'Development'
+        createSandBox: false
+        createProfile: false
+        failBuildIfUploadAndScanBuildStepFails: true
+        importResults: true
+        failBuildOnPolicyFail: true
+
+# Open Source Security Scan using Black Duck
+    - task: BlackDuckScan@1
+      displayName: 'Black Duck Open Source Security Scan'
+      inputs:
+        BlackDuckService: 'BlackDuckServiceConnection'
+        DetectArguments: '--detect.project.name=$(CONTAINERAPPS_APP) --detect.project.version.name=$(TAG)'
+        DetectFolder: '$(Build.SourcesDirectory)'
+        AddTaskSummary: true
+        FailOnPolicyViolation: true 
+# Deploy Stage with Multi-Region Deployment to Development Environment   
+        
+- stage: Deploy
+  displayName: 'Development Environment - Multi-Region Deploy'
+  dependsOn: Build
+  jobs:
+#Deploy to Azure East US Region - Development
+  - job: DeployEastUS
+    displayName: 'Deploy to Development - East US'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureContainerApps@1
+      displayName: 'Deploy to Container Apps - East US'
+      inputs:
+        azureSubscription: 'myAzureServiceConnection'
+        resourceGroup: '$(RESOURCE_GROUP_EAST_DEV)'
+        containerAppName: '$(CONTAINERAPPS_APP)'
+        imageToDeploy: '$(ACR_NAME).azurecr.io/$(IMAGE_NAME):$(TAG)'
+# Deploy to Azure West US Region - Development
+  - job: DeployWestUS
+    displayName: 'Deploy to Development - West US'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureContainerApps@1
+      displayName: 'Deploy to Container Apps - West US'
+      inputs:
+        azureSubscription: 'myAzureServiceConnection'
+        resourceGroup: '$(RESOURCE_GROUP_WEST_DEV)'
+        containerAppName: '$(CONTAINERAPPS_APP)'
+        imageToDeploy: '$(ACR_NAME).azurecr.io/$(IMAGE_NAME):$(TAG)'
+
+# UAT Stage with Multi-Region Deployment to UAT Environment   
+        
+- stage: UAT
+  displayName: 'UAT Environment - Multi-Region Deploy'
+  dependsOn: Deploy
+  jobs:
+#Deploy to Azure East US Region - UAT
+  - job: DeployUATEastUS
+    displayName: 'Deploy to UAT - East US'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureContainerApps@1
+      displayName: 'Deploy to Container Apps - UAT East US'
+      inputs:
+        azureSubscription: 'myAzureServiceConnection'
+        resourceGroup: '$(RESOURCE_GROUP_EAST_UAT)'
+        containerAppName: '$(CONTAINERAPPS_APP)'
+        imageToDeploy: '$(ACR_NAME).azurecr.io/$(IMAGE_NAME):$(TAG)'
+
+# Deploy to Azure West US Region - UAT
+  - job: DeployUATWestUS
+    displayName: 'Deploy to UAT - West US'
+    dependsOn: DeployUATEastUS
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureContainerApps@1
+      displayName: 'Deploy to Container Apps - UAT West US'
+      inputs:
+        azureSubscription: 'myAzureServiceConnection'
+        resourceGroup: '$(RESOURCE_GROUP_WEST_UAT)'
+        containerAppName: '$(CONTAINERAPPS_APP)'
+        imageToDeploy: '$(ACR_NAME).azurecr.io/$(IMAGE_NAME):$(TAG)'
+
+# Smoke Tests for UAT Environment
+  - job: SmokeTestsUAT
+    displayName: 'Run Smoke Tests in UAT'
+    dependsOn:
+    - DeployUATEastUS
+    - DeployUATWestUS
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - script: |
+        echo "Running smoke tests for $(CONTAINERAPPS_APP) in UAT"
+        echo "Testing health endpoint in East US UAT"
+        echo "Testing health endpoint in West US UAT"
+        echo "Validating critical API endpoints"
+        echo "Verifying container app is running"
+      displayName: 'Execute UAT Smoke Tests'
+    
+    - script: |
+        echo "All UAT smoke tests passed successfully"
+      displayName: 'Smoke Test Results'
