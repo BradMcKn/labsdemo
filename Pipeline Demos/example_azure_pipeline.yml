@@ -1,0 +1,190 @@
+# Azure DevOps Pipeline for Building, Analyzing, Deploying, and Testing an Application this is for demonstration purposes. and is showing both Devleopment and UAT stages with static code analysis using SonarCloud. An alternative Veracode step is commented out.
+
+#═══════════════════════════════════════════════════════════════
+# AZURE DEVOPS CI/CD PIPELINE
+# Application: My Azure App
+# Purpose: Multi-region deployment with static code analysis
+#═══════════════════════════════════════════════════════════════
+
+trigger:
+- main
+pool:
+  vmImage: 'ubuntu-latest'
+
+#───────────────────────────────────────────────────────────────
+# PIPELINE VARIABLES
+#───────────────────────────────────────────────────────────────
+variables:
+    appName: 'my-azure-app'
+    buildConfiguration: 'Release'
+    artifactName: 'drop'
+    buildTag: 'v1.0.${{ Build.BuildId }}'
+    primaryRegion: 'East US'
+    secondaryRegion: 'West US'
+    devRgEast: 'my-app-dev-eastus-rg'
+    devRgWest: 'my-app-dev-westus-rg'
+    uatRgEast: 'my-app-uat-eastus-rg'
+    uatRgWest: 'my-app-uat-westus-rg'
+    ownerTag: 'DevOpsTeam'
+    costCenterTag: 'App5478'
+    projectTag: 'AzurePipelineDemo'
+
+
+# CI STAGE - BUILD & CODE ANALYSIS
+
+stages:
+- stage: Dev
+  displayName: 'Development Environment'
+  jobs:
+
+  # BUILD JOB
+
+  - job: Build
+    displayName: 'Build Application'
+    steps:
+    - script: |
+        echo "Build $(appName)"
+        mkdir $(Build.ArtifactStagingDirectory)/$(artifactName)
+        echo "sample output file" > $(Build.ArtifactStagingDirectory)/$(artifactName)/output.txt
+      displayName: 'Build Step'
+
+    # Static Code Analysis - SonarCloud
+    - task: SonarCloudPrepare@1
+      displayName: 'SonarCloud Analysis Preparation'
+      inputs:
+        SonarCloud: 'SonarCloudServiceConnection'
+        organization: 'my-organization'
+        scannerMode: 'CLI'
+        projectKey: 'my-azure-app-key'
+        projectName: 'My Azure App'
+
+    - script: |
+        echo "Running SonarCloud Analysis"
+      displayName: 'SonarCloud Analysis'
+
+    - task: SonarCloudPublish@1
+      displayName: 'Publish SonarCloud Results'
+      inputs:
+        pollingTimeoutSec: '300'
+
+    # Static Code Analysis - Veracode Alternative
+    # Uncomment the section below to use Veracode instead of SonarCloud
+    # - task: Veracode@3
+    #   displayName: 'Veracode Upload and Scan'
+    #   inputs:
+    #     ConnectionDetailsSelection: 'Endpoint'
+    #     AnalysisService: 'VeracodeServiceConnection'
+    #     veracodeAppProfile: '$(appName)'
+    #     version: '$(buildTag)'
+    #     filepath: '$(Build.ArtifactStagingDirectory)/$(artifactName)'
+    #     sandboxName: 'Development'
+    #     createSandBox: false
+    #     createProfile: false
+    #     failBuildIfUploadAndScanBuildStepFails: true
+    #     importResults: true
+    #     failBuildOnPolicyFail: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/$(artifactName)'
+        artifactName: '$(artifactName)'
+        publishLocation: 'pipeline'
+
+  # DEPLOY TO DEV - EAST US
+
+  - job: DeployDevEast
+    displayName: 'Deploy to East US'
+    dependsOn: Build
+    steps:
+    - download: current
+      artifact: '$(artifactName)'
+    - script: |
+        echo "Deploying $(appName) to $(devRgEast) in $(primaryRegion)"
+      displayName: 'Deploy to East US'
+    - script: |
+        echo "Tagging resources in $(devRgEast)"
+        echo "Owner: $(ownerTag)"
+        echo "Cost Center: $(costCenterTag)"
+        echo "Project: $(projectTag)"
+      displayName: 'Tag Resources East'
+
+  # DEPLOY TO DEV - WEST US
+ 
+  - job: DeployDevWest
+    displayName: 'Deploy to West US'
+    dependsOn: Build
+    steps:
+    - download: current
+      artifact: '$(artifactName)'
+    - script: |
+        echo "Deploying $(appName) to $(devRgWest) in $(secondaryRegion)"
+      displayName: 'Deploy to West US'
+    - script: |
+        echo "Tagging resources in $(devRgWest)"
+        echo "Owner: $(ownerTag)"
+        echo "Cost Center: $(costCenterTag)"
+        echo "Project: $(projectTag)"
+      displayName: 'Tag Resources West'
+
+
+# CD STAGE - UAT DEPLOYMENT & TESTING
+
+- stage: UAT
+  displayName: 'User Acceptance Testing Environment'
+  dependsOn: Dev
+  jobs:
+
+  # DEPLOY TO UAT - EAST US
+
+  - job: DeployUATEast
+    displayName: 'Deploy to East US'
+    steps:
+    - download: current
+      artifact: '$(artifactName)'
+    - script: |
+        echo "Deploying $(appName) to $(uatRgEast) in $(primaryRegion)"
+      displayName: 'Deploy to East US'
+    - script: |
+        echo "Tagging resources in $(uatRgEast)"
+        echo "Owner: $(ownerTag)"
+        echo "Cost Center: $(costCenterTag)"
+        echo "Project: $(projectTag)"
+      displayName: 'Tag Resources East'
+
+ 
+  # DEPLOY TO UAT - WEST US
+
+  - job: DeployUATWest
+    displayName: 'Deploy to West US'
+    steps:
+    - download: current
+      artifact: '$(artifactName)'
+    - script: |
+        echo "Deploying $(appName) to $(uatRgWest) in $(secondaryRegion)"
+      displayName: 'Deploy to West US'
+    - script: |
+        echo "Tagging resources in $(uatRgWest)"
+        echo "Owner: $(ownerTag)"
+        echo "Cost Center: $(costCenterTag)"
+        echo "Project: $(projectTag)"
+      displayName: 'Tag Resources West'
+
+ 
+  # SMOKE TESTS
+ 
+  - job: SmokeTests
+    displayName: 'Run Smoke Tests'
+    dependsOn: 
+    - DeployUATEast
+    - DeployUATWest
+    steps:
+    - script: |
+        echo "Running smoke tests for $(appName) in UAT"
+        echo "Testing health endpoint in $(primaryRegion)"
+        echo "Testing health endpoint in $(secondaryRegion)"
+        echo "Validating critical user paths"
+      displayName: 'Execute Smoke Tests'
+    - script: |
+        echo "All smoke tests passed successfully"
+      displayName: 'Smoke Test Results'
