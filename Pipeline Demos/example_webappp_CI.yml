@@ -1,0 +1,51 @@
+#this is a yaml file for a CI pipeline for a web application 
+trigger: 'none' #this will make the pipeline manual trigger only in Azure DevOps
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+#simple variable declaration if needed we can add more variables here but this is just a CI pipeline example
+variables:
+  BuildConfiguration: 'Release'
+
+steps:
+  - task: usedotnet@1
+    displayName: Install .NET SDK 8.0
+    inputs:
+      packageType: 'sdk'
+      version: '8.0.x'
+      installationPath: $(Agent.ToolsDirectory)/dotnet
+
+  - task: DotNetCoreCLI@1
+    displayName: Restore NuGet Packages
+    inputs:
+      command: 'restore'
+      projects: '**/*.csproj'
+
+  - task: DotNetCoreCLI@1
+    displayName: Build Web application
+    inputs:
+      command: 'build'
+      projects: '**/*.csproj'
+      arguments: '--configuration $(BuildConfiguration)'
+
+  - task: DotNetCoreCLI@1
+    displayName: Run Unit Tests
+    inputs:
+      command: 'test'
+      projects: '**/*Tests/*.csproj'
+      arguments: '--configuration $(BuildConfiguration)'
+
+  - task: DotNetCoreCLI@1
+    displayName: Publish Artifacts
+    inputs:
+      command: 'publish'
+      publishWebProjects: true
+      arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+      zipAfterPublish: true
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish Build Artifacts
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
