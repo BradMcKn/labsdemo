@@ -1,0 +1,110 @@
+#this remediation pipeline is for when Kuberentes pods go into crashloopbackoff state
+trigger: none # Manual trigger only for now
+
+pool:
+  vmImage: 'windows-latest' # Changed to windows for PowerShell script
+
+variables:
+  Azure_Service_Connection: 'myAzureServiceConnection'
+  AKS_Resource_Group: 'my-aks-resource-group'
+  AKS_Cluster_Name: 'my-aks-cluster'
+  Namespace: 'default'
+
+steps:
+  # Validation: Check if script file exists
+  - task: PowerShell@2
+    displayName: 'Validate Script Exists'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $scriptPath = "$(System.DefaultWorkingDirectory)/Shell Scripting Examples/crashloopbackoff_example.ps1"
+        if (-not (Test-Path $scriptPath)) {
+            Write-Error "Script not found at: $scriptPath"
+            exit 1
+        }
+        Write-Host "✓ Script found at: $scriptPath"
+
+  # Validation: PowerShell syntax check
+  - task: PowerShell@2
+    displayName: 'Validate PowerShell Syntax'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $scriptPath = "$(System.DefaultWorkingDirectory)/Shell Scripting Examples/crashloopbackoff_example.ps1"
+        $errors = $null
+        $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $scriptPath -Raw), [ref]$errors)
+        if ($errors.Count -gt 0) {
+            Write-Error "PowerShell syntax errors found:"
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+        }
+        Write-Host "✓ PowerShell syntax is valid"
+
+  # Validation: Check Azure CLI and kubectl are available
+  - task: AzureCLI@2
+    displayName: 'Validate Required Tools'
+    inputs:
+      azureSubscription: '$(Azure_Service_Connection)'
+      scriptType: 'pscore'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        # Check Azure CLI
+        $azVersion = az version --output json | ConvertFrom-Json
+        Write-Host "✓ Azure CLI version: $($azVersion.'azure-cli')"
+        
+        # Check kubectl
+        $kubectlVersion = kubectl version --client --output=json 2>$null | ConvertFrom-Json
+        Write-Host "✓ kubectl version: $($kubectlVersion.clientVersion.gitVersion)"
+        
+        # Verify AKS cluster accessibility
+        Write-Host "Verifying AKS cluster connectivity..."
+        az aks show --resource-group '$(AKS_Resource_Group)' --name '$(AKS_Cluster_Name)' --query "name" -o tsv
+        Write-Host "✓ AKS cluster is accessible"
+
+  # Main execution
+  - task: AzureCLI@2
+    displayName: 'Detect and Restart CrashLoopBackOff Pods'
+    inputs:
+      azureSubscription: '$(Azure_Service_Connection)'
+      scriptType: 'pscore' # PowerShell Core
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(System.DefaultWorkingDirectory)/Shell Scripting Examples/crashloopbackoff_example.ps1'
+      arguments: '-resourceGroup $(AKS_Resource_Group) -clusterName $(AKS_Cluster_Name) -namespace $(Namespace)'
+      addSpnToEnvironment: true
+
+  # Post-execution verification
+  - task: AzureCLI@2
+    displayName: 'Verify No CrashLoopBackOff Pods Remain'
+    inputs:
+      azureSubscription: '$(Azure_Service_Connection)'
+      scriptType: 'pscore'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        az aks get-credentials --resource-group '$(AKS_Resource_Group)' --name '$(AKS_Cluster_Name)' --overwrite-existing
+        
+        $crashLoopPods = kubectl get pods -n '$(Namespace)' -o json | ConvertFrom-Json | 
+          Select-Object -ExpandProperty items | 
+          Where-Object { 
+            $_.status.containerStatuses.state.waiting.reason -eq "CrashLoopBackOff" 
+          }
+        
+        if ($crashLoopPods.Count -gt 0) {
+            Write-Warning "Warning: $($crashLoopPods.Count) pod(s) still in CrashLoopBackOff state"
+            $crashLoopPods | ForEach-Object { Write-Warning "  - $($_.metadata.name)" }
+        } else {
+            Write-Host "✓ No CrashLoopBackOff pods detected in namespace '$(Namespace)'"
+        }
+      continueOnError: true
+
+# Alternative: Inline script approach (uncomment to use)
+# steps:
+#   - task: AzureCLI@2
+#     displayName: 'Detect and Restart CrashLoopBackOff Pods'
+#     inputs:
+#       azureSubscription: '$(Azure_Service_Connection)'
+#       scriptType: 'pscore'
+#       scriptLocation: 'inlineScript'
+#       inlineScript: |
+#         . "$(System.DefaultWorkingDirectory)/Shell Scripting Examples/crashloopbackoff_example.ps1"
+#         Invoke-HandleCrashLoopBackOff -resourceGroup '$(AKS_Resource_Group)' -clusterName '$(AKS_Cluster_Name)' -namespace '$(Namespace)'
+#       addSpnToEnvironment: true
