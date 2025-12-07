@@ -1,8 +1,35 @@
 # Variables for App Service Terraform Template
 # This file defines all configurable parameters for the App Service deployment
 
+# ========================================
 # RESOURCE GROUP VARIABLES
+# ========================================
 
+variable "primary_resource_group_name" {
+  description = "Name of the primary Azure resource group (East US)"
+  type        = string
+  default     = "app-service-primary-rg"
+}
+
+variable "primary_location" {
+  description = "Primary Azure region for resources (e.g., East US)"
+  type        = string
+  default     = "eastus"
+}
+
+variable "secondary_resource_group_name" {
+  description = "Name of the secondary Azure resource group for geo-redundancy (West US)"
+  type        = string
+  default     = "app-service-secondary-rg"
+}
+
+variable "secondary_location" {
+  description = "Secondary Azure region for geo-redundancy (e.g., West US)"
+  type        = string
+  default     = "westus"
+}
+
+# Legacy resource group variables (for backward compatibility)
 variable "resource_group_name" {
   description = "Name of the Azure resource group"
   type        = string
@@ -15,7 +42,10 @@ variable "location" {
   default     = "West Europe"
 }
 
+# ========================================
 # APP SERVICE PLAN VARIABLES
+# ========================================
+# For pricing and SKU details, see: https://azure.microsoft.com/en-us/pricing/calculator/
 
 variable "app_service_plan_name" {
   description = "Name of the App Service Plan (must be unique within subscription)"
