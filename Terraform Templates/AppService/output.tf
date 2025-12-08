@@ -106,3 +106,81 @@ output "secondary_app_service_plan_size" {
   value       = azurerm_app_service_plan.azAppServiceTemplatePlan2.sku[0].size
 }
 
+# ========================================
+# PRIMARY APP SERVICE OUTPUTS
+# ========================================
+# Outputs for the primary App Service (East US)
+
+output "primary_app_service_id" {
+  description = "ID of the primary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate1.id
+}
+
+output "primary_app_service_name" {
+  description = "Name of the primary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate1.name
+}
+
+output "primary_app_service_default_hostname" {
+  description = "Default hostname of the primary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate1.default_site_hostname
+}
+
+output "primary_app_service_url" {
+  description = "Full HTTPS URL of the primary App Service"
+  value       = "https://${azurerm_app_service.azAppServiceTemplate1.default_site_hostname}"
+}
+
+output "primary_app_service_outbound_ip_addresses" {
+  description = "Outbound IP addresses of the primary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate1.outbound_ip_addresses
+}
+
+# ========================================
+# SECONDARY APP SERVICE OUTPUTS
+# ========================================
+# Outputs for the secondary App Service (West US) for geo-redundancy
+
+output "secondary_app_service_id" {
+  description = "ID of the secondary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate2.id
+}
+
+output "secondary_app_service_name" {
+  description = "Name of the secondary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate2.name
+}
+
+output "secondary_app_service_default_hostname" {
+  description = "Default hostname of the secondary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate2.default_site_hostname
+}
+
+output "secondary_app_service_url" {
+  description = "Full HTTPS URL of the secondary App Service"
+  value       = "https://${azurerm_app_service.azAppServiceTemplate2.default_site_hostname}"
+}
+
+output "secondary_app_service_outbound_ip_addresses" {
+  description = "Outbound IP addresses of the secondary App Service"
+  value       = azurerm_app_service.azAppServiceTemplate2.outbound_ip_addresses
+}
+
+# ========================================
+# DEPLOYMENT SUMMARY
+# ========================================
+# Summary of all deployed resources for quick reference
+
+output "deployment_summary" {
+  description = "Summary of deployed resources"
+  value = {
+    subscription               = data.azurerm_subscription.current.display_name
+    primary_region            = var.primary_location
+    secondary_region          = var.secondary_location
+    primary_app_service_url   = "https://${azurerm_app_service.azAppServiceTemplate1.default_site_hostname}"
+    secondary_app_service_url = "https://${azurerm_app_service.azAppServiceTemplate2.default_site_hostname}"
+    app_service_plan_tier     = var.app_service_plan_tier
+    app_service_plan_size     = var.app_service_plan_size
+  }
+}
+
