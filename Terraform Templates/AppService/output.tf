@@ -167,6 +167,56 @@ output "secondary_app_service_outbound_ip_addresses" {
 }
 
 # ========================================
+# PRIMARY APP SERVICE SLOT OUTPUTS
+# ========================================
+# Outputs for the primary staging slot (East US)
+
+output "primary_staging_slot_id" {
+  description = "ID of the primary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot1_staging.id
+}
+
+output "primary_staging_slot_name" {
+  description = "Name of the primary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot1_staging.name
+}
+
+output "primary_staging_slot_hostname" {
+  description = "Default hostname of the primary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot1_staging.default_site_hostname
+}
+
+output "primary_staging_slot_url" {
+  description = "Full HTTPS URL of the primary staging slot"
+  value       = "https://${azurerm_app_service_slot.azAppServiceSlot1_staging.default_site_hostname}"
+}
+
+# ========================================
+# SECONDARY APP SERVICE SLOT OUTPUTS
+# ========================================
+# Outputs for the secondary staging slot (West US)
+
+output "secondary_staging_slot_id" {
+  description = "ID of the secondary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot2_staging.id
+}
+
+output "secondary_staging_slot_name" {
+  description = "Name of the secondary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot2_staging.name
+}
+
+output "secondary_staging_slot_hostname" {
+  description = "Default hostname of the secondary staging slot"
+  value       = azurerm_app_service_slot.azAppServiceSlot2_staging.default_site_hostname
+}
+
+output "secondary_staging_slot_url" {
+  description = "Full HTTPS URL of the secondary staging slot"
+  value       = "https://${azurerm_app_service_slot.azAppServiceSlot2_staging.default_site_hostname}"
+}
+
+# ========================================
 # DEPLOYMENT SUMMARY
 # ========================================
 # Summary of all deployed resources for quick reference
@@ -174,13 +224,16 @@ output "secondary_app_service_outbound_ip_addresses" {
 output "deployment_summary" {
   description = "Summary of deployed resources"
   value = {
-    subscription               = data.azurerm_subscription.current.display_name
-    primary_region            = var.primary_location
-    secondary_region          = var.secondary_location
-    primary_app_service_url   = "https://${azurerm_app_service.azAppServiceTemplate1.default_site_hostname}"
-    secondary_app_service_url = "https://${azurerm_app_service.azAppServiceTemplate2.default_site_hostname}"
-    app_service_plan_tier     = var.app_service_plan_tier
-    app_service_plan_size     = var.app_service_plan_size
+    subscription                    = data.azurerm_subscription.current.display_name
+    primary_region                  = var.primary_location
+    secondary_region                = var.secondary_location
+    primary_app_service_url         = "https://${azurerm_app_service.azAppServiceTemplate1.default_site_hostname}"
+    secondary_app_service_url       = "https://${azurerm_app_service.azAppServiceTemplate2.default_site_hostname}"
+    primary_staging_slot_url        = "https://${azurerm_app_service_slot.azAppServiceSlot1_staging.default_site_hostname}"
+    secondary_staging_slot_url      = "https://${azurerm_app_service_slot.azAppServiceSlot2_staging.default_site_hostname}"
+    app_service_plan_tier           = var.app_service_plan_tier
+    app_service_plan_size           = var.app_service_plan_size
+    staging_slot_enabled            = var.enable_staging_slot
   }
 }
 

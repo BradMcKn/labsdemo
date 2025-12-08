@@ -86,6 +86,22 @@ variable "dotnet_framework_version" {
   default     = "v6.0"
 }
 
+# ========================================
+# APP SERVICE SLOT VARIABLES
+# ========================================
+
+variable "enable_staging_slot" {
+  description = "Enable staging slot for blue-green deployments"
+  type        = bool
+  default     = true
+}
+
+variable "staging_slot_name" {
+  description = "Name of the staging slot"
+  type        = string
+  default     = "staging"
+}
+
 # scm_type is used if you're using GitHub/Git SCM to push code directly to the app
 # Not needed when deploying via Azure DevOps tasks (AzureWebApp@1, AzureRmWebAppDeployment)
 # variable "scm_type" {

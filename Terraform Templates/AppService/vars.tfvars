@@ -21,6 +21,13 @@ app_service_plan_size = "P1V2"
 # ========================================
 app_service_name         = "myapp-service"
 dotnet_framework_version = "v6.0"
+
+# ========================================
+# APP SERVICE SLOT VARIABLES
+# ========================================
+enable_staging_slot = true
+staging_slot_name   = "staging"
+
 # scm_type is used if you're using GitHub/Git SCM to push code directly to the app
 # Not needed when deploying via Azure DevOps tasks
 # scm_type                 = "LocalGit"
